@@ -180,7 +180,7 @@ Car reply = Car.newBuilder().setName("Tesla").build();
 
 On the client side we deserialize the message:
 
-![Image 3](./images/null_example.png)
+![Image 3](./images/null_Example.png)
 
 and we see in debug mode that engine is null so we expect NullPointerExcception while invoking the next line:
 ```
