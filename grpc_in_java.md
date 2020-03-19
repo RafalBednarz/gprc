@@ -180,7 +180,8 @@ Car reply = Car.newBuilder().setName("Tesla").build();
 
 On the client side we deserialize the message:
 
-![Image 3](./images/null_Example.png)
+![Image 3](./images/getEngine.png)
+
 
 and we see in debug mode that engine is null so we expect NullPointerExcception while invoking the next line:
 ```
@@ -188,7 +189,7 @@ int engineCapacity = response.getEngine().getCapacity();
 ```
 But instead we get "0" assigned as engineCapacity. Why is that? Let's have a look what engine getter does:
 
-![Image 4](./images/getEngine.png)
+![Image 4](./images/null_Example.png)
 
 Well get a new object with default values created ad-hoc. So instead of writing
 ```
