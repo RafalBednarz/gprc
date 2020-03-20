@@ -22,13 +22,13 @@ To summarize the knowledge and compare it with two other most widely used webser
 |Contract format     | WSDL | depending on tool, most popular is YAML  |  proto file |
 | data exchange format      | usually XML      |   usually JSON | protocol buffers |
 
-To me, it's more similar to SOAP since you have mandatory contract but much easier to use.
+To me, it's more similar to SOAP since you have mandatory contract but compared to SOAP is much easier to use.
 
 gRPC makes development in Java quite easy (null-safety and immutability by default) and 
 it is very hard to break its compability while developing new versions of the contract. This
 is very important feature in large distributed systems.
 
-So let's discuss its features in details!
+So let's discuss these features in details!
 
 ## Protocol buffers under the hood
 
@@ -57,7 +57,7 @@ the protobuf message will look like that:
 
 We will not dig into how string or numeric values are encoded, it's not important for the sake of 
 this article. It is worth to know it was designed to outperform other formats like JSON or XML 
-in terms of network load but if you are interested in details you can find it in the aforementioned protobuf guide.
+in terms of network load, if you are interested in details you can find it in the aforementioned protobuf guide.
 
 ## Required, optional and default values
 
@@ -66,13 +66,13 @@ However *required* have been removed from the new proto3 syntax all fields are o
 There were long discussions and debates about 
 usefulness of *required* keyword; long story short - the argument against *required* is that 
 you cannot add or remove required field to not break wire compatibility with previous version of a contract. 
-Therefore all fields in proto3 are optional. Since all fields became not-required optional keyword was also dropped from proto3.
+Therefore all fields in proto3 are optional. Since all fields became not-required, optional keyword was also dropped from proto3.
 
 Ok, but what does it exactly mean that the field is optional? In database world we usually 
 set not-null constraint if we require value to be present. In Java we also usually enforce that presence
 is required by checking if value is not null. This doesn't apply to primitives which are initialized
  automatically with their default values. 
-Proto fields are more like Java primitives. Scalar proto fields are never null - if not set 
+Proto fields are more like Java primitives. Scalar proto fields are never null - if not set explicitly
 they evaluate to default values i.e.
 - zero for numeric fields
 - false for boolean
@@ -145,8 +145,8 @@ I think the purpose of the first on is quite clear, it enables to use it in a th
 However, what is even better about using gRPC Pojos in Java is the fact that you don't have to care 
 about checking for nulls.
 
-Why is that? I already mentioned that default scalar values in proto are naver null.
-It's zero for numeric, false for boolean etc.
+The reason for that should be pretty clear by now. I already mentioned that default scalar values 
+in proto are never null. It's zero for numeric, false for boolean etc.
 
 However, how about nested messages? [Developers guide](https://developers.google.com/protocol-buffers/docs/proto3#default) 
 says "for message fields, the field is not set. Its exact value is language-dependent."
@@ -191,7 +191,7 @@ But instead we get "0" assigned as engineCapacity. Why is that? Let's have a loo
 
 ![Image 4](./images/null_Example.png)
 
-Well get a new object with default values created ad-hoc. So instead of writing
+Well, we get a new object with default values created ad-hoc. So instead of writing
 ```
 Optional.ofNullable(response.getEngine()).map(Engine::getCapacity).orElse(0);
 ```
@@ -212,7 +212,6 @@ which are used to specify a subset of fields
 that should be modified by an update operation (or returned by get operation). Field Mask is just 
 a set of field names (yes, names, that's why you need to be careful changing the contract when using Field Mask)
 which are to be modified.
-
 
 
 ##
