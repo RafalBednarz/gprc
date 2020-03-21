@@ -6,26 +6,26 @@ with Stubby - their own framework used internally to handle billions of requests
 ## Comparison with SOAP and Rest
 
 This article is based on my experience in using Stubby and gRPC for quite some time. I assume basic 
-knowledge about what is gRPC i.e. how to define a service in .proto file and write
+knowledge about what is gRPC i.e. how to define a service in .proto file and generate and run
 server and client code in Java.
 
 However if you are new to gRPC you may want to read first: 
  - [gRPC basics in Java tutorial](https://grpc.io/docs/tutorials/basic/java/)
  - [gRPC Spring Boot Starter](https://github.com/yidongnan/grpc-spring-boot-starter) with many examples
- - and our [previous blog article](https://blog.j-labs.pl/2019/04/gRPC-over-HTTP2-or-How-I-learned-to-stop-depending-on-REST-and-love-gRPC)
+ - [our previous blog article](https://blog.j-labs.pl/2019/04/gRPC-over-HTTP2-or-How-I-learned-to-stop-depending-on-REST-and-love-gRPC)
 
 To summarize the knowledge and compare it with two other most widely used webservice standards: SOAP and Rest I attach the following table.
 
 |               | SOAP           | Rest  | gRPC|
 | ------------- |:-------------:| :-----| ---:|
-|Contract| required - contract-first of contract-last | not required - can be contract-first or contract-last | required - contract-first|
-|Contract format     | WSDL | depending on tool, most popular is YAML  |  proto file |
-| data exchange format      | usually XML      |   usually JSON | protocol buffers |
+|Contract| required contract-first or contract-last | not required - may be contract-first or contract-last | required - contract-first|
+|Contract format     | WSDL | YAML (most popular)  |  .proto file |
+| data exchange format      | XML      | JSON (most popular) | protocol buffers (most popular |
 
 To me, it's more similar to SOAP since you have mandatory contract but compared to SOAP is much easier to use.
 
 gRPC makes development in Java quite easy (null-safety and immutability by default) and 
-it is very hard to break its compability while developing new versions of the contract. This
+it is very hard to break its compatibility while developing new versions of the contract. This
 is very important feature in large distributed systems.
 
 So let's discuss these features in details!
@@ -55,41 +55,50 @@ the protobuf message will look like that:
 
 ![Image 2](./images/protobuf_example.png)
 
-We will not dig into how string or numeric values are encoded, it's not important for the sake of 
-this article. It is worth to know it was designed to outperform other formats like JSON or XML 
-in terms of network load, if you are interested in details you can find it in the aforementioned protobuf guide.
+We will not delve into encoding of string or numeric values, it's not important for the sake of 
+this article, however it is worth to know it was designed to outperform other formats like JSON or XML 
+in terms of network load - if you are interested in details you can find it in the aforementioned protobuf guide.
 
 ## Required, optional and default values
 
-In older version of proto specification, namely *proto2*, you were able to specify if a field is *required* or *optional*.
-However *required* have been removed from the new proto3 syntax all fields are optional now. 
+In older version of proto specification, namely *proto2*, you were able to specify if a field is 
+*required* or *optional*.
+However *required* have been removed from the new proto3 syntax. 
 There were long discussions and debates about 
 usefulness of *required* keyword; long story short - the argument against *required* is that 
 you cannot add or remove required field to not break wire compatibility with previous version of a contract. 
-Therefore all fields in proto3 are optional. Since all fields became not-required, optional keyword was also dropped from proto3.
+Since all fields became not-required, optional keyword was also dropped from proto3.
 
-Ok, but what does it exactly mean that the field is optional? In database world we usually 
-set not-null constraint if we require value to be present. In Java we also usually enforce that presence
-is required by checking if value is not null. This doesn't apply to primitives which are initialized
- automatically with their default values. 
-Proto fields are more like Java primitives. Scalar proto fields are never null - if not set explicitly
-they evaluate to default values i.e.
+Does it mean that all fields became optional? It depends what you mean by optional. In database world we usually 
+set not-null constraint if we require value to be present. In Java we also enforce presence of an 
+Object by checking if it's not null. This doesn't apply to primitives which are initialized
+ automatically with their default values. You can write
+```
+int i;
+```
+which is equivalent to:
+```
+int i = 0;
+```
+
+Proto3 fields are similar to Java primitives, they are never null. You cannot
+tell the difference if a field was explicitly set to its default value or not set at all.
+
+What are default values for most popular proto3 types?
 - zero for numeric fields
 - false for boolean
 - empty string for string
 
 You can check full list in [Proto3 language guide](https://developers.google.com/protocol-buffers/docs/proto3#default)
 
-sources:
-https://github.com/protocolbuffers/protobuf/issues/2497
-https://stackoverflow.com/questions/31801257/why-required-and-optional-is-removed-in-protocol-buffers-3
-https://capnproto.org/faq.html#how-do-i-make-a-field-required-like-in-protocol-buffers
+You can enforce user to set a field to something different than default value but you have 
+check it manually in Java code.
 
 ## Proto files backward compatibility
 
 Armed with the knowledge about how protocol buffers work and default values let's have a look at example.
 
-Assume we have car rental company and we share API for car aggregators. As a part of proto3 we 
+Assume we have car rental company and we share API in order to be used by car aggregators. As a part of proto3 we 
 have the following Car message definition. This is of course overly simplified for sake of clarity.
 ```
 message Car {
@@ -109,7 +118,7 @@ enum Color {
 
 Now, we realize that our customers don't care about color of a car but they are interested
 in number of seats available. We also decided to change *description* to *additional information* 
-- just the name of the field, we still store the same information there.
+(just the name of the field, we still store the same information there).
 
 This is our new Car message definition:
 ```
@@ -135,9 +144,16 @@ which in case of enum is whatever we assign to zero (UNDEFINED in our case)
 3. Addition of another field is also backward compatible - client with old version will just ignore
 message with unknown index.
 
+As you can see it is hard to break proto3 backward compatibility. 
+The general rules while changing proto files definitions is: 
+
+1. Do not change tags for the field messages
+
+2. Do not reuse tags for the field messages, i.e do not intoduce new messages in a place of removed ones
+
 ## Using gRPC in Java
 As noted before, gRPC is always contract-first and in each language we get the code generated
-based on a proto contract. I wanted to stress two main features of Java generated code:
+based on a proto contract. I would like to stress two main features of Java generated code:
 - It's messages are used using Builder pattern and are once build are immutable
 - It's (almost) impossible to get NullPointerException which manipulating protobuf objects.
 
@@ -197,9 +213,18 @@ Optional.ofNullable(response.getEngine()).map(Engine::getCapacity).orElse(0);
 ```
 So we can chain getters without any null checks. How cool is that, right?
 
+And one more thing - in case of messages we can check for its presence using hasXXX method, for example
+
+```
+if(response.hasEngine()) {
+  System.out.println("This car has an Engine);
+}
+```
+We cannot do it for scalar fields.
+
 ## Field masks
 So far so good, we no longer care about infamous NullPointerException. Unfortunately, there is no
-rose without a thorn. Null is also same kind of information, which we are not able to transmit via gRPC.
+rose without a thorn. Null is also same kind of information that we are not able to transmit via protobuf.
 Let's assume that we would like to update resource partially, like in PATCH method of REST. 
 Normally you wouldn't send just values you want to update, usually
 that means that value is null. However, this is not the case with gRPC. 
@@ -213,13 +238,24 @@ that should be modified by an update operation (or returned by get operation). F
 a set of field names (yes, names, that's why you need to be careful changing the contract when using Field Mask)
 which are to be modified.
 
+You could use [FieldMaskUtil](https://developers.google.com/protocol-buffers/docs/reference/java/com/google/protobuf/util/FieldMaskUtil)
+class to the most popular operation types.
 
-##
+## Conclusion
+I the article I tried to gather the most common problems and question you may encounter developing 
+service using gRPC in Java.
+I hope that it is much clearer now, good luck on your coding journey!
 
 ## References
 https://developers.google.com/protocol-buffers/docs/encoding
 
 https://grpc.io/
+
+https://stackoverflow.com/questions/31801257/why-required-and-optional-is-removed-in-protocol-buffers-3
+
+https://capnproto.org/faq.html#how-do-i-make-a-field-required-like-in-protocol-buffers
+
+https://github.com/protocolbuffers/protobuf/issues/2497
 
 https://stackoverflow.com/questions/31801257/why-required-and-optional-is-removed-in-protocol-buffers-3
 
