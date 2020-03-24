@@ -6,34 +6,40 @@ with Stubby - their own framework used internally to handle billions of requests
 ## Comparison with SOAP and Rest
 
 This article is based on my experience in using Stubby and gRPC for quite some time. I assume basic 
-knowledge about what is gRPC i.e. how to define a service in .proto file and generate and run
-server and client code in Java.
+knowledge about what is gRPC i.e. how to define a service in .proto file, generate
+server and client code in Java and run it.
 
 However if you are new to gRPC you may want to read first: 
  - [gRPC basics in Java tutorial](https://grpc.io/docs/tutorials/basic/java/)
  - [gRPC Spring Boot Starter](https://github.com/yidongnan/grpc-spring-boot-starter) with many examples
  - [our previous blog article](https://blog.j-labs.pl/2019/04/gRPC-over-HTTP2-or-How-I-learned-to-stop-depending-on-REST-and-love-gRPC)
 
-To summarize the knowledge and compare it with two other most widely used webservice standards: SOAP and Rest I attach the following table.
+The following table compares gRPC with another most widely used RPC/webservice technologies nowadays:
 
 |               | SOAP           | Rest  | gRPC|
 | ------------- |:-------------:| :-----| ---:|
 |Contract| required contract-first or contract-last | not required - may be contract-first or contract-last | required - contract-first|
 |Contract format     | WSDL | YAML (most popular)  |  .proto file |
-| data exchange format      | XML      | JSON (most popular) | protocol buffers (most popular |
+| data transfer format      | XML      | JSON (most popular) | protocol buffers (most popular |
 
-To me, it's more similar to SOAP since you have mandatory contract but compared to SOAP is much easier to use.
+For me, it's more similar to SOAP since you have mandatory contract and you simply define functions
+you would like to invoke with a list and type of arguments and return type. However, WSDL contracts
+in SOAP were considered quite complex and parsing XML was quite memory and compute intense. 
+That's why REST, which is more lightweight, was becoming more and more popular in recent years.
 
-gRPC makes development in Java quite easy (null-safety and immutability by default) and 
-it is very hard to break its compatibility while developing new versions of the contract. This
+gRPC combines advantages of both technologies - .proto file format is much simpler than WSDL
+and its most widely used data exchange format - protocol buffers - is much smaller and faster than XML.
+
+Apart from that, gRPC makes development in Java quite easy (null-safety and immutability by default) and 
+it is quite easy to develop new versions of the contract not breaking its compatibility. This
 is very important feature in large distributed systems.
 
 So let's discuss these features in details!
 
 ## Protocol buffers under the hood
 
-You may have heard that protocol buffers (a.k.a. protobuf) is binary wire format. Unlike other data 
-exchange formats like XML, JSON or YAML it is not human readable, yet it is quite important 
+You may have heard that protocol buffers (a.k.a. protobuf) is a method of serializing data. Unlike other data
+ formats like XML, JSON or YAML it is not human readable, yet it is quite important 
 to know how it is built.
 Each protobuf message consists of series of key-value pairs. Key specifies which message from 
  proto definition we are sending and of what type.
@@ -55,8 +61,8 @@ the protobuf message will look like that:
 
 ![Image 2](./images/protobuf_example.png)
 
-We will not delve into encoding of string or numeric values, it's not important for the sake of 
-this article, however it is worth to know it was designed to outperform other formats like JSON or XML 
+We are not particularly interested in details of values encoding, it's not important for the sake of 
+this article. Nonetheless it is worth to know it was designed to outperform other formats like JSON or XML 
 in terms of network load - if you are interested in details you can find it in the aforementioned protobuf guide.
 
 ## Required, optional and default values
@@ -81,7 +87,10 @@ which is equivalent to:
 int i = 0;
 ```
 
-Proto3 fields are similar to Java primitives, they are never null. You cannot
+Proto3 fields are similar to Java primitives, they are never null. Looking from this perspective 
+they are always "required" they must have some value.
+
+The bottom line is: you cannot
 tell the difference if a field was explicitly set to its default value or not set at all.
 
 What are default values for most popular proto3 types?
@@ -91,8 +100,8 @@ What are default values for most popular proto3 types?
 
 You can check full list in [Proto3 language guide](https://developers.google.com/protocol-buffers/docs/proto3#default)
 
-You can enforce user to set a field to something different than default value but you have 
-check it manually in Java code.
+So is it possible to enforce user to set a field to something different than default value?
+Not as a part of the contract, you have to validate it manually in the code.
 
 ## Proto files backward compatibility
 
@@ -117,8 +126,8 @@ enum Color {
 ```
 
 Now, we realize that our customers don't care about color of a car but they are interested
-in number of seats available. We also decided to change *description* to *additional information* 
-(just the name of the field, we still store the same information there).
+in number of seats available. We also decided to change *description* property to *additional information* 
+(just name of the field, we still store the same information there).
 
 This is our new Car message definition:
 ```
@@ -131,42 +140,47 @@ message Car {
   
 }
 ```
-The question is: can we deploy this service to production knowing that many clients
-are already using the service? Are we risking that clients' services will crash? Let's examine these cases one by one:
+The question is: can we deploy this service to production knowing that we have a lot of clients
+using the service? Are we risking that clients' services will crash? 
+Let's examine these cases one by one:
 
-1. We change field's name to additional_information. At first sight it seems like this is breaking
-change but is it really? Let's recall how the message is send over the wire - the key by which we 
+1. We changed field's name to additional_information. At first sight it seems like this is breaking
+change, isn't it? Well, not if you remember how protobuf message is send over the wire - the key by which we 
 identify the value is only field index ("3" in our case which didn't change) and wire type (string) 
-which also didn't change. (caveat: it will not work when you use Field Masks)
-2. Removal of color enum also does not seem safe. However it is - if we don't send color over the
-wire and the client will have old version of the proto, it will automatically evaluate to default value,
-which in case of enum is whatever we assign to zero (UNDEFINED in our case)
+which also didn't change. So we are safe to do this change. 
+(caveat: it will not work when you use Field Masks, I will discuss it later)
+
+2. Removal of color also does not look safe. What happens if we don't send color over the
+wire? On the client side, with old version of the proto, it will automatically evaluate to default value,
+which in case of enum is whatever we assign to zero (UNDEFINED in our case). So apart from losing
+ information about car color this contract change shouldn't require any code change on the client side.
+
 3. Addition of another field is also backward compatible - client with old version will just ignore
 message with unknown index.
 
-As you can see it is hard to break proto3 backward compatibility. 
-The general rules while changing proto files definitions is: 
+As you can see it is quite hard to break proto3 backward compatibility. 
+The general rules while changing proto files definitions are: 
 
 1. Do not change tags for the field messages
 
-2. Do not reuse tags for the field messages, i.e do not intoduce new messages in a place of removed ones
+2. Do not reuse tags for the field messages, i.e do not introduce new messages in a place of removed ones
 
 ## Using gRPC in Java
-As noted before, gRPC is always contract-first and in each language we get the code generated
-based on a proto contract. I would like to stress two main features of Java generated code:
-- It's messages are used using Builder pattern and are once build are immutable
-- It's (almost) impossible to get NullPointerException which manipulating protobuf objects.
+As noted before, gRPC is always contract-first and in each language we get the code generated by the protocol buffer compiler. 
+I would like to stress two main features of Java generated code:
+- We build proto messages using Builder pattern and they are immutable.
+- It's (almost) impossible to get NullPointerException while manipulating protobuf objects in Java.
 
 I think the purpose of the first on is quite clear, it enables to use it in a thread-safe manner.
-However, what is even better about using gRPC Pojos in Java is the fact that you don't have to care 
+However, what is even better about using proto messages in Java is the fact that you don't have to care 
 about checking for nulls.
 
 The reason for that should be pretty clear by now. I already mentioned that default scalar values 
-in proto are never null. It's zero for numeric, false for boolean etc.
+in proto are never null. They are zero for numeric, false for boolean etc.
 
 However, how about nested messages? [Developers guide](https://developers.google.com/protocol-buffers/docs/proto3#default) 
 says "for message fields, the field is not set. Its exact value is language-dependent."
-It's a bit unclear and it's hard to find answer for Java, so let's try to test it. 
+It's a bit unclear and it's hard to find what it really means for Java, so let's try to test it. 
 
 We modify Car message to have some nested message there. Let it be *Engine*:
 
@@ -188,7 +202,7 @@ message Engine {
 
 ```
 
-On the server side we populate Car object like that (notice that we don't set Engine at all, only name)
+On the server side we populate Car object like that (notice that we don't set Engine at all)
 
 ```
 Car reply = Car.newBuilder().setName("Tesla").build();
@@ -223,27 +237,27 @@ if(response.hasEngine()) {
 We cannot do it for scalar fields.
 
 ## Field masks
-So far so good, we no longer care about infamous NullPointerException. Unfortunately, there is no
-rose without a thorn. Null is also same kind of information that we are not able to transmit via protobuf.
+So far so good, we no longer care about infamous NullPointerException. However "null" is also 
+some kind of information and we don't have possibility to transmit it via protobuf.
 Let's assume that we would like to update resource partially, like in PATCH method of REST. 
-Normally you wouldn't send just values you want to update, usually
-that means that value is null. However, this is not the case with gRPC. 
-Remember, that even if you don't send the value over the wire it 
+Normally you just wouldn't send the values you want to update.
+That is not possible with gRPC - even if you don't send the value over the wire it 
 will be evaluated to default value while deserializing. If you have empty string how do you know
 if it means "don't update the value" or "set value to empty"?
 
-That's why gRPC developers come up with [FieldMasks](https://developers.google.com/protocol-buffers/docs/reference/java/com/google/protobuf/FieldMask) 
+That's why gRPC developers came up with [FieldMasks](https://developers.google.com/protocol-buffers/docs/reference/java/com/google/protobuf/FieldMask) 
 which are used to specify a subset of fields 
 that should be modified by an update operation (or returned by get operation). Field Mask is just 
-a set of field names (yes, names, that's why you need to be careful changing the contract when using Field Mask)
+a set of field names (yes, names, not tags, that's why you need to be careful changing the contract when using Field Mask)
 which are to be modified.
 
 You could use [FieldMaskUtil](https://developers.google.com/protocol-buffers/docs/reference/java/com/google/protobuf/util/FieldMaskUtil)
-class to the most popular operation types.
+class which greatly facilitates working with Field Masks.
 
 ## Conclusion
 I the article I tried to gather the most common problems and question you may encounter developing 
-service using gRPC in Java.
+and maintaining a service using gRPC in Java.
+
 I hope that it is much clearer now, good luck on your coding journey!
 
 ## References
