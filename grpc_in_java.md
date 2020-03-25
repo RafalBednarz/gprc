@@ -17,7 +17,7 @@ However if you are new to gRPC you may want to read first:
 The following table compares gRPC with another most widely used RPC/webservice technologies nowadays:
 
 |               | SOAP           | Rest  | gRPC|
-| ------------- |:-------------:| :-----| ---:|
+| ------------- |:-------------:|:-----:|:---:|
 |Contract| required contract-first or contract-last | not required - may be contract-first or contract-last | required - contract-first|
 |Contract format     | WSDL | YAML (most popular)  |  .proto file |
 | data transfer format      | XML      | JSON (most popular) | protocol buffers (most popular |
